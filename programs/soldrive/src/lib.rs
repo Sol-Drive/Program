@@ -39,6 +39,48 @@ pub mod soldrive {
         msg!("User profile created for {}", ctx.accounts.user.key());
         Ok(())
     }
+    pub fn create_file(
+        ctx: Context<CreateFile>,
+        file_name: String,
+        file_size: u64,
+        file_hash: [u8; 32],
+        chunk_count: u32,
+    ) -> Result<()> {
+        // input validation
+        require!(file_name.len() <= 50, ErrorCode::FileNameTooLong);
+        require!(file_size > 0, ErrorCode::InvalidFileSize);
+        require!(chunk_count > 0, ErrorCode::InvalidChunkCount);
+        
+        let file_record = &mut ctx.accounts.file_record;
+        let clock = Clock::get()?;
+        
+        // Set file record data
+        file_record.owner = ctx.accounts.owner.key();
+        file_record.file_name = file_name.clone();
+        file_record.file_size = file_size;
+        file_record.file_hash = file_hash;
+        file_record.chunk_count = chunk_count;
+        file_record.created_at = clock.unix_timestamp;
+        file_record.updated_at = clock.unix_timestamp;
+        file_record.status = FileStatus::Uploading;
+        file_record.is_public = false;
+        // Empty until storage is registered
+        file_record.primary_storage = String::new(); 
+        // Will be set when storage is registered
+        file_record.merkle_root = [0; 32]; 
+        
+        // Update global stats
+        let config = &mut ctx.accounts.config;
+        config.total_files += 1;
+        
+        // Update user profile
+        let user_profile = &mut ctx.accounts.user_profile;
+        user_profile.files_owned += 1;
+        user_profile.storage_used += file_size;
+        
+        msg!("File created: {} ({} bytes, {} chunks)", file_name, file_size, chunk_count);
+        Ok(())
+    }
 }
 
 // Context for our hello instruction (empty for now)
