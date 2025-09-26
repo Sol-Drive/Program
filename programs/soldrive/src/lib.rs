@@ -36,7 +36,7 @@ pub mod soldrive {
         // Start with good reputation
         user_profile.reputation_score = 100; 
         
-        msg!("User profile created for: {}", ctx.accounts.user.key());
+        msg!("User profile created for {}", ctx.accounts.user.key());
         Ok(())
     }
 }
@@ -90,8 +90,7 @@ pub struct SolDriveConfig {
     pub max_file_size: u64,      
 }
 
-// USER PRODILE DS
-
+// User profile data structure
 #[account]
 pub struct UserProfile{
      // User's wallet address
@@ -103,4 +102,77 @@ pub struct UserProfile{
     // When their storage payment expires
     pub storage_paid_until: i64,  
     pub reputation_score: u32, 
+}
+
+#[derive(Accounts)]
+pub struct CreateFile<'info> {
+    #[account(
+        init,
+        payer = owner,
+        space = 8 + 32 + 54 + 8 + 32 + 4 + 32 + 104 + 8 + 8 + 1 + 1, // discriminator + owner + name + size + hash + chunks + merkle + storage + created + updated + status + public
+        seeds = [b"file", owner.key().as_ref(), &Clock::get()?.unix_timestamp.to_le_bytes()],
+        bump
+    )]
+    pub file_record: Account<'info, FileRecord>,
+    
+    #[account(
+        mut,
+        seeds = [b"config"],
+        bump
+    )]
+    pub config: Account<'info, SolDriveConfig>,
+    
+    #[account(
+        mut,
+        seeds = [b"user_profile", owner.key().as_ref()],
+        bump
+    )]
+    pub user_profile: Account<'info, UserProfile>,
+    
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    
+    pub system_program: Program<'info, System>,
+}
+
+//  File record data structure
+#[account]
+pub struct FileRecord {
+    pub owner: Pubkey,             
+    pub file_name: String,          
+    pub file_size: u64,            
+    pub file_hash: [u8; 32],       
+    pub chunk_count: u32,          
+    pub merkle_root: [u8; 32],     
+    pub primary_storage: String,    
+    pub created_at: i64,           
+    pub updated_at: i64,           
+    pub status: FileStatus,       
+    pub is_public: bool,           
+}
+
+//  File status enum
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
+pub enum FileStatus {
+    Uploading, 
+
+    // File is fully uploaded and being verified   
+    Processing,   
+    Active, 
+
+    // File is archived (not actively stored) archived means its moved to cold storage      
+    Archived,     
+    // File marked for deletion
+    Deleted,     
+}
+
+//  Custom error codes
+#[error_code]
+pub enum ErrorCode {
+    #[msg("File name is too long (max 50 characters)")]
+    FileNameTooLong,
+    #[msg("Invalid file size")]
+    InvalidFileSize,
+    #[msg("Invalid chunk count")]
+    InvalidChunkCount,
 }
