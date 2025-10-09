@@ -1,4 +1,5 @@
 
+<<<<<<< HEAD
 ## 📖 Overview
 
 Sol-Drive is a decentralized file storage platform that lets users upload, store, and retrieve files securely.  
@@ -34,3 +35,6 @@ Files are split into chunks, stored on IPFS, and indexed on the Solana blockchai
 2. Solana is queried for chunk hashes  
 3. IPFS chunks are fetched  
 4. File is reconstructed and downloaded
+=======
+Thinking if IPFS is right or wrong
+>>>>>>> 5cb58cd (Test : Initialize and Demos)
