@@ -45,6 +45,7 @@ pub mod soldrive {
         file_size: u64,
         file_hash: [u8; 32],
         chunk_count: u32,
+        timestamp: i64,
     ) -> Result<()> {
         // input validation
         require!(file_name.len() <= 50, ErrorCode::FileNameTooLong);
@@ -147,12 +148,13 @@ pub struct UserProfile{
 }
 
 #[derive(Accounts)]
+#[instruction(timestamp: i64)] // This is a instruction parameter
 pub struct CreateFile<'info> {
     #[account(
         init,
         payer = owner,
         space = 8 + 32 + 54 + 8 + 32 + 4 + 32 + 104 + 8 + 8 + 1 + 1, // discriminator + owner + name + size + hash + chunks + merkle + storage + created + updated + status + public
-        seeds = [b"file", owner.key().as_ref(), &Clock::get()?.unix_timestamp.to_le_bytes()],
+        seeds = [b"file", owner.key().as_ref(), &timestamp.to_le_bytes()],
         bump
     )]
     pub file_record: Account<'info, FileRecord>,
