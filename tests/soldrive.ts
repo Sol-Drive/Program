@@ -50,9 +50,7 @@ describe("soldrive", () => {
     const tx = await program.methods
       .initialize()
       .accounts({
-        config: configPda,
         authority: authority.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
       })
       .rpc();
 
@@ -66,9 +64,7 @@ describe("soldrive", () => {
     const tx = await program.methods
       .createUserProfile()
       .accounts({
-        userProfile: userProfilePda,
         user: testUser.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
       })
       .signers([testUser])
       .rpc();
@@ -79,3 +75,4 @@ describe("soldrive", () => {
     expect(userProfile.owner.toString()).to.equal(testUser.publicKey.toString());
     expect(userProfile.filesOwned.toNumber()).to.equal(0);
   });
+});

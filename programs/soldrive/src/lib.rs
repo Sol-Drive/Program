@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 // This is program ID (we'll update it after building)
-declare_id!("11111111111111111111111111111111");
+declare_id!("CxDoRt3Nt5z747KNW6vkVxvQQ7c2dHMmGmoWNmxejA3f");
 
 #[program]
 pub mod soldrive {
