@@ -74,5 +74,77 @@ describe("soldrive", () => {
     const userProfile = await program.account.userProfile.fetch(userProfilePda);
     expect(userProfile.owner.toString()).to.equal(testUser.publicKey.toString());
     expect(userProfile.filesOwned.toNumber()).to.equal(0);
+  });it("creates a file record", async () => {
+    // mock file data
+    const fileName = "vacation_photo.jpg";
+    const fileSize = new anchor.BN(1024 * 1024); // 1mb
+    const fileHash = crypto.randomBytes(32); // random 32-byte hash
+    const chunkCount = 4; // 1mb file split into 4 chunks of 256kb each
+  
+    // get current timestamp for pda seed
+    const timestamp = Math.floor(Date.now() / 1000);
+    
+    // find file record pda
+    const [fileRecordPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("file"), 
+        testUser.publicKey.toBuffer(), 
+        Buffer.from(timestamp.toString().padStart(16, "0"))
+      ],
+      program.programId
+    );
+  
+    // get config pda
+    const [configPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("config")],
+      program.programId
+    );
+  
+    console.log("creating file:");
+    console.log("- name:", fileName);
+    console.log("- size:", fileSize.toString(), "bytes");
+    console.log("- chunks:", chunkCount);
+    console.log("- file record pda:", fileRecordPda.toString());
+  
+    // create the file
+    const tx = await program.methods
+      .createFile(fileName, fileSize, Array.from(fileHash), chunkCount, new anchor.BN(timestamp))
+      .accounts({
+        owner: testUser.publicKey,
+      })
+      .signers([testUser])
+      .rpc();
+  
+    console.log("create file transaction:", tx);
+  
+    // verify the file was created correctly
+    const fileRecord = await program.account.fileRecord.fetch(fileRecordPda);
+    
+    console.log("file record created:");
+    console.log("- owner:", fileRecord.owner.toString());
+    console.log("- name:", fileRecord.fileName);
+    console.log("- size:", fileRecord.fileSize.toString());
+    console.log("- chunks:", fileRecord.chunkCount);
+    console.log("- status:", Object.keys(fileRecord.status)[0]);
+    console.log("- created at:", new Date(fileRecord.createdAt.toNumber() * 1000));
+  
+    // verify the data
+    expect(fileRecord.owner.toString()).to.equal(testUser.publicKey.toString());
+    expect(fileRecord.fileName).to.equal(fileName);
+    expect(fileRecord.fileSize.toString()).to.equal(fileSize.toString());
+    expect(fileRecord.chunkCount).to.equal(chunkCount);
+    expect(Object.keys(fileRecord.status)[0]).to.equal("uploading");
+    expect(fileRecord.isPublic).to.equal(false);
+  
+    // check that user profile was updated
+    const updatedUserProfile = await program.account.userProfile.fetch(userProfilePda);
+    expect(updatedUserProfile.filesOwned.toNumber()).to.equal(1);
+    expect(updatedUserProfile.storageUsed.toString()).to.equal(fileSize.toString());
+  
+    // check that global config was updated
+    const updatedConfig = await program.account.solDriveConfig.fetch(configPda);
+    expect(updatedConfig.totalFiles.toNumber()).to.equal(1);
   });
+  
+
 });

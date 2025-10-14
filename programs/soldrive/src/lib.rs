@@ -89,7 +89,7 @@ pub mod soldrive {
 pub struct HelloSoldrive {}
 
 #[derive(Accounts)]
-pub struct Initialize<'info> {
+pub struct  Initialize<'info> {
     #[account(
         init,
         payer = authority,
