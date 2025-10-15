@@ -53,7 +53,6 @@ pub mod soldrive {
         require!(chunk_count > 0, ErrorCode::InvalidChunkCount);
         
         let file_record = &mut ctx.accounts.file_record;
-        let clock = Clock::get()?;
         
         // Set file record data
         file_record.owner = ctx.accounts.owner.key();
@@ -61,8 +60,8 @@ pub mod soldrive {
         file_record.file_size = file_size;
         file_record.file_hash = file_hash;
         file_record.chunk_count = chunk_count;
-        file_record.created_at = clock.unix_timestamp;
-        file_record.updated_at = clock.unix_timestamp;
+        file_record.created_at = timestamp;
+        file_record.updated_at = timestamp;
         file_record.status = FileStatus::Uploading;
         file_record.is_public = false;
         // Empty until storage is registered
@@ -148,13 +147,13 @@ pub struct UserProfile{
 }
 
 #[derive(Accounts)]
-#[instruction(timestamp: i64)] // This is a instruction parameter
+#[instruction(file_name: String)]
 pub struct CreateFile<'info> {
     #[account(
         init,
         payer = owner,
         space = 8 + 32 + 54 + 8 + 32 + 4 + 32 + 104 + 8 + 8 + 1 + 1, // discriminator + owner + name + size + hash + chunks + merkle + storage + created + updated + status + public
-        seeds = [b"file", owner.key().as_ref(), &timestamp.to_le_bytes()],
+        seeds = [b"file", owner.key().as_ref(), file_name.as_bytes()],
         bump
     )]
     pub file_record: Account<'info, FileRecord>,
