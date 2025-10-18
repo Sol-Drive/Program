@@ -33,6 +33,7 @@ describe("soldrive", () => {
     );
   });
 
+
   it("Says hello!", async () => {
     const tx = await program.methods
       .helloSoldrive()
@@ -142,4 +143,73 @@ describe("soldrive", () => {
     const updatedConfig = await program.account.solDriveConfig.fetch(configPda);
     expect(updatedConfig.totalFiles.toNumber()).to.equal(1);
   });
+
+  it("creates multiple files for the same user", async () => {
+  const files = [
+    { name: "document.pdf", size: 512 * 1024, chunks: 2 }, // 512 KB
+    { name: "music.mp3", size: 2 * 1024 * 1024, chunks: 8 }, // 2 MB
+    { name: "video.mp4", size: 5 * 1024 * 1024, chunks: 20 }, // 5 MB
+  ];
+
+  const [configPda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("config")],
+    program.programId
+  );
+
+  let totalStorage = 0;
+
+  for (const f of files) {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const fileHash = crypto.randomBytes(32);
+    totalStorage += f.size;
+
+    const [fileRecordPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("file"),
+        testUser.publicKey.toBuffer(),
+        Buffer.from(f.name),
+      ],
+      program.programId
+    );
+
+    console.log("Creating file:");
+    console.log("name:", f.name);
+    console.log(" size:", f.size, "bytes");
+    console.log(" chunks:", f.chunks);
+    console.log(" file record pda:", fileRecordPda.toString());
+
+    const tx = await program.methods
+      .createFile(
+        f.name,
+        new anchor.BN(f.size),
+        Array.from(fileHash),
+        f.chunks,
+        new anchor.BN(timestamp)
+      )
+      .accounts({
+        owner: testUser.publicKey,
+      })
+      .signers([testUser])
+      .rpc();
+
+    console.log(" File created, tx:", tx);
+
+    const fileRecord = await program.account.fileRecord.fetch(fileRecordPda);
+    expect(fileRecord.owner.toString()).to.equal(testUser.publicKey.toString());
+    expect(fileRecord.fileName).to.equal(f.name);
+    expect(fileRecord.fileSize.toString()).to.equal(f.size.toString());
+    expect(fileRecord.chunkCount).to.equal(f.chunks);
+    expect(Object.keys(fileRecord.status)[0]).to.equal("uploading");
+  }
+
+  // check updated profile
+  const userProfile = await program.account.userProfile.fetch(userProfilePda);
+  expect(userProfile.filesOwned.toNumber()).to.equal(files.length + 1); // include first file
+  expect(userProfile.storageUsed.toNumber()).to.equal(totalStorage + 1024 * 1024); // include first file's 1MB
+
+  // check updated config
+  const configAccount = await program.account.solDriveConfig.fetch(configPda);
+  expect(configAccount.totalFiles.toNumber()).to.equal(files.length + 1);
+});
+
 });
