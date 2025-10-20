@@ -104,6 +104,34 @@ pub fn register_storage(
     msg!("storage registered: {}", primary_storage);
     Ok(())
 }
+// mark a file as fully uploaded and active
+pub fn finalize_file(ctx: Context<FinalizeFile>) -> Result<()> {
+    // get mutable access to the file record
+    let file_record = &mut ctx.accounts.file_record;
+    // fetch current blockchain timestamp
+    let clock = Clock::get()?;
+    
+    // ensure the file is currently in 'processing' state
+    require!(
+        file_record.status == FileStatus::Processing,
+        ErrorCode::InvalidFileStatus
+    );
+    // ensure storage location (ipfs cid) is already registered
+    require!(
+        !file_record.primary_storage.is_empty(),
+        ErrorCode::NoStorageLocation
+    );
+    
+    // update status to 'active' meaning file is finalized and ready
+    file_record.status = FileStatus::Active;
+    // record the update time
+    file_record.updated_at = clock.unix_timestamp;
+    
+    // log confirmation message
+    msg!("file finalized and ready: {}", file_record.file_name);
+    Ok(())
+}
+
 
 }
 
@@ -233,6 +261,21 @@ pub struct RegisterStorage<'info> {
     // wallet of the file owner who registers storage
     pub owner: Signer<'info>,
 }
+// context: verifies correct owner and file status before finalization
+#[derive(Accounts)]
+pub struct FinalizeFile<'info> {
+    #[account(
+        mut,
+        has_one = owner,
+        constraint = file_record.status == FileStatus::Processing @ ErrorCode::InvalidFileStatus
+    )]
+    pub file_record: Account<'info, FileRecord>,
+
+    // signer must be the owner of the file
+    pub owner: Signer<'info>,
+}
+
+
 //  File status enum
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
 pub enum FileStatus {
