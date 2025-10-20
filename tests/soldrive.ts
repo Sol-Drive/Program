@@ -11,7 +11,7 @@ describe("soldrive", () => {
   const program = anchor.workspace.Soldrive as Program<Soldrive>;
   const authority = provider.wallet;
 
-  // We'll reuse this user across tests
+  //  reuse this user across tests
   let testUser: anchor.web3.Keypair;
   let userProfilePda: anchor.web3.PublicKey;
 
@@ -210,6 +210,51 @@ describe("soldrive", () => {
   // check updated config
   const configAccount = await program.account.solDriveConfig.fetch(configPda);
   expect(configAccount.totalFiles.toNumber()).to.equal(files.length + 1);
+});
+
+it("registers storage for a file (IPFS CID + merkle root)", async () => {
+  // use one of the files created before (e.g., vacation_photo.jpg)
+  const fileName = "vacation_photo.jpg";
+
+  // derive file PDA
+  const [fileRecordPda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("file"),
+      testUser.publicKey.toBuffer(),
+      Buffer.from(fileName),
+    ],
+    program.programId
+  );
+
+  // sample IPFS CID and merkle root
+  const primaryStorage = "bafybeigdyrandomipfscidexample12345";
+  const merkleRoot = new Uint8Array(32).fill(9);
+
+  console.log("registering storage for:", fileName);
+  console.log("file pda:", fileRecordPda.toBase58());
+  console.log("ipfs cid:", primaryStorage);
+
+  // call the register_storage instruction
+  const tx = await program.methods
+    .registerStorage(primaryStorage, Array.from(merkleRoot))
+    .accounts({
+      fileRecord: fileRecordPda,
+      owner : testUser.publicKey
+    })
+    .signers([testUser])
+    .rpc();
+
+  console.log("register_storage transaction:", tx);
+
+  // fetch the updated file record
+  const fileRecord = await program.account.fileRecord.fetch(fileRecordPda);
+
+  // assertions
+  expect(fileRecord.primaryStorage).to.equal(primaryStorage);
+  expect(fileRecord.merkleRoot).to.deep.equal(Array.from(merkleRoot));
+  expect(Object.keys(fileRecord.status)[0]).to.equal("processing");
+
+  console.log("storage registered successfully for:", fileRecord.fileName);
 });
 
 });
