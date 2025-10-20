@@ -81,6 +81,30 @@ pub mod soldrive {
         msg!("File created: {} ({} bytes, {} chunks)", file_name, file_size, chunk_count);
         Ok(())
     }
+
+    // register storage location (ipfs cid)
+pub fn register_storage(
+    ctx: Context<RegisterStorage>,
+    primary_storage: String,
+    merkle_root: [u8; 32],
+) -> Result<()> {
+    // validate input
+    require!(primary_storage.len() <= 100, ErrorCode::StorageLocationTooLong);
+    require!(primary_storage.len() > 0, ErrorCode::StorageLocationEmpty);
+    
+    let file_record = &mut ctx.accounts.file_record;
+    let clock = Clock::get()?;
+    
+    // update file metadata
+    file_record.primary_storage = primary_storage.clone();
+    file_record.merkle_root = merkle_root;
+    file_record.status = FileStatus::Processing;
+    file_record.updated_at = clock.unix_timestamp;
+    
+    msg!("storage registered: {}", primary_storage);
+    Ok(())
+}
+
 }
 
 // Context for our hello instruction (empty for now)
@@ -194,6 +218,21 @@ pub struct FileRecord {
     pub is_public: bool,           
 }
 
+// context for registering storage (ipfs cid + merkle root)
+#[derive(Accounts)]
+pub struct RegisterStorage<'info> {
+    // file record to be updated with storage info
+    // must belong to the owner and be in 'uploading' state
+    #[account(
+        mut,
+        has_one = owner,
+        constraint = file_record.status == FileStatus::Uploading @ ErrorCode::InvalidFileStatus
+    )]
+    pub file_record: Account<'info, FileRecord>,
+    
+    // wallet of the file owner who registers storage
+    pub owner: Signer<'info>,
+}
 //  File status enum
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
 pub enum FileStatus {
@@ -210,6 +249,7 @@ pub enum FileStatus {
 }
 
 //  Custom error codes
+// Updated error codes
 #[error_code]
 pub enum ErrorCode {
     #[msg("File name is too long (max 50 characters)")]
@@ -218,4 +258,12 @@ pub enum ErrorCode {
     InvalidFileSize,
     #[msg("Invalid chunk count")]
     InvalidChunkCount,
+    #[msg("Storage location string is too long (max 100 characters)")]
+    StorageLocationTooLong,
+    #[msg("Storage location cannot be empty")]
+    StorageLocationEmpty,
+    #[msg("Invalid file status for this operation")]
+    InvalidFileStatus,
+    #[msg("No storage location registered")]
+    NoStorageLocation,
 }
