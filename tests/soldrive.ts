@@ -3,6 +3,7 @@ import { Program } from "@coral-xyz/anchor";
 import { Soldrive } from "../target/types/soldrive";
 import { expect } from "chai";
 import * as crypto from "crypto";
+import { BN } from "bn.js";
 
 describe("soldrive", () => {
   const provider = anchor.AnchorProvider.env();
@@ -327,6 +328,62 @@ it("finalizes a file successfully after storage registration", async () => {
   expect(fileRecord.primaryStorage).to.equal(ipfsCid);
 
   console.log("file finalized successfully");
+});
+it("fails to finalize without storage registration", async () => {
+  // create file data
+  const fileName = "no_storage_file.jpg";
+  const fileSize = new anchor.BN(512 * 1024);
+  const fileHash = crypto.randomBytes(32);
+  const chunkCount = 2;
+  const timestamp = Math.floor(Date.now() / 1000) + 100;
+
+  // derive pdas
+  const [fileRecordPda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("file"),
+      testUser.publicKey.toBuffer(),
+Buffer.from(fileName),    ],
+    program.programId
+  );
+
+  const [configPda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("config")],
+    program.programId
+  );
+
+  // create file
+  await program.methods
+    .createFile(fileName, fileSize, Array.from(fileHash), chunkCount, new BN(timestamp))
+    .accounts({
+      fileRecord: fileRecordPda,
+      config: configPda,
+      userProfile: userProfilePda,
+      owner: testUser.publicKey,
+      systemProgram: anchor.web3.SystemProgram.programId,
+    })
+    .signers([testUser])
+    .rpc();
+
+  console.log("file created (no storage):", fileName);
+
+  // try finalizing without storage
+  try {
+    await program.methods
+      .finalizeFile()
+      .accounts({
+        fileRecord: fileRecordPda,
+        owner: testUser.publicKey,
+      })
+      .signers([testUser])
+      .rpc();
+
+    // should not reach here
+    expect.fail("should have failed to finalize without storage");
+  } catch (error) {
+    // check for correct error
+    expect(error.toString()).to.include("InvalidFileStatus");
+    console.log("finalization prevented as expected");
+  }
 });
 
 
