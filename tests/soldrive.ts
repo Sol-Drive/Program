@@ -256,5 +256,78 @@ it("registers storage for a file (IPFS CID + merkle root)", async () => {
 
   console.log("storage registered successfully for:", fileRecord.fileName);
 });
+it("finalizes a file successfully after storage registration", async () => {
+  // create file data
+  const fileName = "finalizable_file.jpg";
+  const fileSize = new anchor.BN(1024 * 1024);
+  const fileHash = crypto.randomBytes(32);
+  const chunkCount = 4;
+  const timestamp = Math.floor(Date.now() / 1000);
+
+  // derive pdas
+  const [fileRecordPda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("file"),
+      testUser.publicKey.toBuffer(),
+      Buffer.from(fileName),
+    ],
+    program.programId
+  );
+
+  const [configPda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("config")],
+    program.programId
+  );
+  // create file
+  await program.methods
+    .createFile(fileName, fileSize, Array.from(fileHash), chunkCount,new anchor.BN(timestamp))
+    .accounts({
+      fileRecord: fileRecordPda,
+      config: configPda,
+      userProfile: userProfilePda,
+      owner: testUser.publicKey,
+      systemProgram: anchor.web3.SystemProgram.programId,    })
+    .signers([testUser])
+    .rpc();
+
+  console.log("file created:", fileName);
+
+  // register storage (ipfs)
+  const ipfsCid = "bafybeigdyrzt5examplecidforfinalization";
+  const merkleRoot = crypto.randomBytes(32);
+
+  await program.methods
+    .registerStorage(ipfsCid, Array.from(merkleRoot))
+    .accounts({
+      fileRecord: fileRecordPda,
+      owner: testUser.publicKey,
+    })
+    .signers([testUser])
+    .rpc();
+
+  console.log("storage registered:", ipfsCid);
+
+  // finalize file
+  const tx = await program.methods
+    .finalizeFile()
+    .accounts({
+      fileRecord: fileRecordPda,
+      owner: testUser.publicKey,
+    })
+    .signers([testUser])
+    .rpc();
+
+  console.log("finalize tx:", tx);
+
+  // fetch updated file record
+  const fileRecord = await program.account.fileRecord.fetch(fileRecordPda);
+
+  // check file status
+  expect(Object.keys(fileRecord.status)[0]).to.equal("active");
+  expect(fileRecord.primaryStorage).to.equal(ipfsCid);
+
+  console.log("file finalized successfully");
+});
+
 
 });
