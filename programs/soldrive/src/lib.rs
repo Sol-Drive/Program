@@ -132,6 +132,56 @@ pub fn finalize_file(ctx: Context<FinalizeFile>) -> Result<()> {
     Ok(())
 }
 
+pub fn grant_access(
+    ctx: Context<GrantAccess>,
+    shared_with: Pubkey,
+    access_level: AccessLevel,
+    expires_at: Option<i64>,
+) -> Result<()> {
+    let shared_access = &mut ctx.accounts.shared_access;
+    let clock = Clock::get()?;
+    
+    // check that the file is still active before sharing
+    require!(
+        ctx.accounts.file_record.status == FileStatus::Active,
+        ErrorCode::FileNotActive
+    );
+    
+    // if expiration time is provided, make sure it’s set in the future
+    if let Some(expiry) = expires_at {
+        require!(expiry > clock.unix_timestamp, ErrorCode::InvalidExpirationTime);
+    }
+    
+    // link to the file being shared
+    shared_access.file_record = ctx.accounts.file_record.key();
+    
+    // set the original file owner
+    shared_access.owner = ctx.accounts.owner.key();
+    
+    // user who is granted access
+    shared_access.shared_with = shared_with;
+    
+    // define permission level
+    shared_access.access_level = access_level.clone();
+    
+    // optional expiry timestamp
+    shared_access.expires_at = expires_at;
+    
+    // record when sharing was created
+    shared_access.created_at = clock.unix_timestamp;
+    
+    // mark as active share
+    shared_access.is_active = true;
+    
+    // log info to program output
+    msg!(
+        "access granted to {} with level {:?}",
+        shared_with,
+        access_level
+    );
+
+    Ok(())
+}
 
 }
 
@@ -350,4 +400,8 @@ pub enum ErrorCode {
     InvalidFileStatus,
     #[msg("No storage location registered")]
     NoStorageLocation,
+    #[msg("File must be active to share")]
+    FileNotActive,
+    #[msg("Expiration time must be in the future")]
+    InvalidExpirationTime,
 }
