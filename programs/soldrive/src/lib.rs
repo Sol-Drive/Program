@@ -275,6 +275,47 @@ pub struct FinalizeFile<'info> {
     pub owner: Signer<'info>,
 }
 
+//  context for granting access
+#[derive(Accounts)]
+#[instruction(shared_with: Pubkey)]
+pub struct GrantAccess<'info> {
+    #[account(
+        init,
+        payer = owner,
+        space = 8 + 32 + 32 + 32 + 1 + 9 + 8 + 1, // discriminator + file_record + owner + shared_with + access_level + expires_at + created_at + is_active
+        seeds = [b"shared_access", file_record.key().as_ref(), shared_with.as_ref()],
+        bump
+    )]
+    pub shared_access: Account<'info, SharedAccess>,
+    
+    #[account(has_one = owner)]
+    pub file_record: Account<'info, FileRecord>,
+    
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    
+    pub system_program: Program<'info, System>,
+}
+
+// shared access account
+#[account]
+pub struct SharedAccess {
+    pub file_record: Pubkey,      // which file is being shared
+    pub owner: Pubkey,            // original file owner
+    pub shared_with: Pubkey,      // user who gets access
+    pub access_level: AccessLevel, // what they can do
+    pub expires_at: Option<i64>,  // when access expires (optional)
+    pub created_at: i64,          // when sharing was created
+    pub is_active: bool,          // can be revoked
+}
+
+//  Access level enum
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Debug)]
+pub enum AccessLevel {
+    Read,      // Can only download
+    Write,     // Can modify (future feature)
+    Admin,     // Can share with others (future feature)
+}
 
 //  File status enum
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
