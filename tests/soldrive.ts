@@ -386,5 +386,98 @@ Buffer.from(fileName),    ],
   }
 });
 
+it("shares a file with another user", async () => {
+  //havent yet finalzed 'vacation_photo.jpg', so first finalize it
+  const fileNameToFinalize = "vacation_photo.jpg";
+  const [fileRecordPda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("file"),
+      testUser.publicKey.toBuffer(),
+      Buffer.from(fileNameToFinalize),
+    ],
+    program.programId
+  );
+  // finalize the file
+  await program.methods
+    .finalizeFile()
+    .accounts({
+      fileRecord: fileRecordPda,
+      owner: testUser.publicKey,
+    })
+    .signers([testUser])
+    .rpc();
+  console.log("finalized file before sharing:", fileNameToFinalize);
+  
+
+  // create a second user to receive access
+  const user2 = anchor.web3.Keypair.generate();
+
+  // airdrop sol to user2 so they can pay for transactions
+  const airdropSig = await provider.connection.requestAirdrop(
+    user2.publicKey,
+    2 * anchor.web3.LAMPORTS_PER_SOL
+  );
+  await provider.connection.confirmTransaction(airdropSig);
+
+  // we'll share the 'vacation_photo.jpg' file created earlier
+  const fileName = "vacation_photo.jpg";
+
+  // derive the file record pda for this file
+  const [testFileRecordPda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("file"),
+      testUser.publicKey.toBuffer(),
+      Buffer.from(fileName),
+    ],
+    program.programId
+  );
+
+  // derive the shared access pda (unique for file + receiver)
+  const [sharedAccessPda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("shared_access"),
+      testFileRecordPda.toBuffer(),
+      user2.publicKey.toBuffer(),
+    ],
+    program.programId
+  );
+
+  // set expiration time for 1 hour from now
+  const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+
+  // call grant_access instruction
+  await program.methods
+    .grantAccess(
+      user2.publicKey,         // receiver public key
+      { read: {} },            // access level (read only)
+      new anchor.BN(expiresAt) // expiration timestamp
+    )
+    .accounts({
+      sharedAccess: sharedAccessPda,       // pda for shared access
+      fileRecord: testFileRecordPda,       // file being shared
+      owner: testUser.publicKey,           // file owner granting access
+      systemProgram: anchor.web3.SystemProgram.programId, // system program
+    })
+    .signers([testUser]) // file owner signs the transaction
+    .rpc();
+
+  console.log("file shared successfully with user2");
+
+  // fetch and verify shared access account
+  const sharedAccess = await program.account.sharedAccess.fetch(sharedAccessPda);
+
+  expect(sharedAccess.fileRecord.toString()).to.equal(testFileRecordPda.toString());
+  expect(sharedAccess.sharedWith.toString()).to.equal(user2.publicKey.toString());
+  expect(sharedAccess.isActive).to.equal(true);
+  expect(Object.keys(sharedAccess.accessLevel)[0]).to.equal("read");
+
+  // print details for clarity
+  console.log("shared access details:");
+  console.log("- shared with:", sharedAccess.sharedWith.toString());
+  console.log("- access level:", Object.keys(sharedAccess.accessLevel)[0]);
+  console.log("- expires at:", new Date(sharedAccess.expiresAt.toNumber() * 1000));
+  console.log("- is active:", sharedAccess.isActive);
+});
+
 
 });
