@@ -479,5 +479,68 @@ it("shares a file with another user", async () => {
   console.log("- is active:", sharedAccess.isActive);
 });
 
+it("Revokes file access", async () => {
+    // Create user3 to test revocation
+    const fileName = "vacation_photo.jpg";
+
+    const user3 = anchor.web3.Keypair.generate();
+    const airdropSig = await provider.connection.requestAirdrop(
+      user3.publicKey,
+      2 * anchor.web3.LAMPORTS_PER_SOL
+    );
+    await provider.connection.confirmTransaction(airdropSig);
+
+    const [testFileRecordPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("file"),
+        testUser.publicKey.toBuffer(),
+        Buffer.from(fileName),
+      ],
+      program.programId
+    );
+
+    // Grant access first
+    const [sharedAccessPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("shared_access"),
+        testFileRecordPda.toBuffer(),
+        user3.publicKey.toBuffer()
+      ],
+      program.programId
+    );
+
+    await program.methods
+      .grantAccess(user3.publicKey, { read: {} }, null)
+      .accounts({
+        sharedAccess: sharedAccessPda,
+        fileRecord: testFileRecordPda,
+        owner: testUser.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([testUser])
+      .rpc();
+
+    // Verify access was granted
+    let sharedAccess = await program.account.sharedAccess.fetch(sharedAccessPda);
+    expect(sharedAccess.isActive).to.equal(true);
+
+    // Now revoke the access
+    await program.methods
+      .revokeAccess()
+      .accounts({
+        sharedAccess: sharedAccessPda,
+        fileRecord: testFileRecordPda,
+        owner: testUser.publicKey,
+      })
+      .signers([testUser])
+      .rpc();
+
+    // Verify access was revoked
+    sharedAccess = await program.account.sharedAccess.fetch(sharedAccessPda);
+    expect(sharedAccess.isActive).to.equal(false);
+
+    console.log("Access successfully revoked",sharedAccess.isActive?" (still active)":" (now inactive)");
+  });
+
 
 });
