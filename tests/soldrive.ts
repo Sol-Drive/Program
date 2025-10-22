@@ -542,5 +542,51 @@ it("Revokes file access", async () => {
     console.log("Access successfully revoked",sharedAccess.isActive?" (still active)":" (now inactive)");
   });
 
+  it("makes file public and then private", async () => {
+    const fileName = "vacation_photo.jpg";
 
+    const [testFileRecordPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("file"),
+        testUser.publicKey.toBuffer(),
+        Buffer.from(fileName),
+      ],
+      program.programId
+    );
+
+    // check initial state 
+    let fileRecord = await program.account.fileRecord.fetch(testFileRecordPda);
+    expect(fileRecord.isPublic).to.equal(false);
+  
+    // make file public
+    await program.methods
+      .makePublic()
+      .accounts({
+        fileRecord: testFileRecordPda,
+        owner: testUser.publicKey,
+      })
+      .signers([testUser])
+      .rpc();
+  
+    // verify it's now public
+    fileRecord = await program.account.fileRecord.fetch(testFileRecordPda);
+    expect(fileRecord.isPublic).to.equal(true);
+    console.log("file is now public");
+  
+    // make file private again
+    await program.methods
+      .makePrivate()
+      .accounts({
+        fileRecord: testFileRecordPda,
+        owner: testUser.publicKey,
+      })
+      .signers([testUser])
+      .rpc();
+  
+    // verify it's private again
+    fileRecord = await program.account.fileRecord.fetch(testFileRecordPda);
+    expect(fileRecord.isPublic).to.equal(false);
+    console.log("file is now private again");
+  });
+  
 });
