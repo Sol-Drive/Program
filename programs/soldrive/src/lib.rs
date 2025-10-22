@@ -192,6 +192,50 @@ pub fn revoke_access(ctx: Context<RevokeAccess>) -> Result<()> {
     msg!("access revoked for: {}", shared_access.shared_with);
     Ok(())
 }
+// make file public
+pub fn make_public(ctx: Context<MakePublic>) -> Result<()> {
+
+    // get mutable access to the file record
+    let file_record = &mut ctx.accounts.file_record;
+    
+    // get current blockchain time
+    let clock = Clock::get()?;
+    
+    // ensure the file is active before making it public
+    require!(
+        file_record.status == FileStatus::Active,
+        ErrorCode::FileNotActive
+    );
+    
+    // mark file as public
+    file_record.is_public = true;
+    // update last modified time
+    file_record.updated_at = clock.unix_timestamp;
+    
+    // log confirmation message
+    msg!("file made public: {}", file_record.file_name);
+    Ok(())
+}
+
+// make file private
+pub fn make_private(ctx: Context<MakePrivate>) -> Result<()> {
+
+    // get mutable access to the file record
+    let file_record = &mut ctx.accounts.file_record;
+
+    // get current blockchain time
+    let clock = Clock::get()?;
+    
+    // mark file as private
+    file_record.is_public = false;
+
+    // update last modified time
+    file_record.updated_at = clock.unix_timestamp;
+    
+    // log confirmation message
+    msg!("file made private: {}", file_record.file_name);
+    Ok(())
+}
 
 
 }
@@ -372,6 +416,34 @@ pub struct RevokeAccess<'info> {
     pub file_record: Account<'info, FileRecord>,
     
     // owner who is revoking access
+    pub owner: Signer<'info>,
+}
+
+// context for making a file public
+#[derive(Accounts)]
+pub struct MakePublic<'info> {
+    // file record to update visibility
+    #[account(
+        mut,
+        has_one = owner
+    )]
+    pub file_record: Account<'info, FileRecord>,
+    
+    // signer who owns the file
+    pub owner: Signer<'info>,
+}
+
+// context for making a file private
+#[derive(Accounts)]
+pub struct MakePrivate<'info> {
+    // file record to update visibility
+    #[account(
+        mut,
+        has_one = owner
+    )]
+    pub file_record: Account<'info, FileRecord>,
+    
+    // signer who owns the file
     pub owner: Signer<'info>,
 }
 
