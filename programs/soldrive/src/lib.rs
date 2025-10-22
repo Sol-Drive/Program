@@ -182,6 +182,17 @@ pub fn grant_access(
 
     Ok(())
 }
+// revoke access from a user
+pub fn revoke_access(ctx: Context<RevokeAccess>) -> Result<()> {
+    let shared_access = &mut ctx.accounts.shared_access;
+    
+    // mark access as inactive
+    shared_access.is_active = false;
+    
+    msg!("access revoked for: {}", shared_access.shared_with);
+    Ok(())
+}
+
 
 }
 
@@ -346,6 +357,24 @@ pub struct GrantAccess<'info> {
     
     pub system_program: Program<'info, System>,
 }
+// context for revoking access
+#[derive(Accounts)]
+pub struct RevokeAccess<'info> {
+    #[account(
+        mut,
+        has_one = owner,
+        has_one = file_record
+    )]
+    // shared access account to update its status
+    pub shared_access: Account<'info, SharedAccess>,
+    
+    // file record associated with the shared access
+    pub file_record: Account<'info, FileRecord>,
+    
+    // owner who is revoking access
+    pub owner: Signer<'info>,
+}
+
 
 // shared access account
 #[account]
